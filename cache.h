@@ -1,33 +1,43 @@
 #ifndef CACHE_H
 #define CACHE_H
- 
-#include "memoria.h"
 
-typedef struct Heap {
-    int *dato;
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct Cache {
+    char *dato;
+    int direccion;
     int ultimo;
-} Heap;
+    int frecuencia;
+} Cache;
 
+int cache_iniciar(int capacidad, int tam_bloque);
 
-void cache_iniciar();
- 
-/* Si el bloque esta en cache copia 'n' bytes desde 'offset' dentro del bloque
- * a 'destino', marca el bloque como recien usado y devuelve 1 (hit).
- * Si no esta devuelve 0 (miss) y no toca nada. */
 int  cache_leer();
- 
-/* Igual que cache_leer pero escribe 'origen' en la linea (write-through:
- * quien llama tambien escribe en memoria). 1 = estaba, 0 = no estaba. */
-int  cache_escribir();
- 
-/* Mete un bloque completo (TAM_BLOQUE_BYTES bytes). Si esta llena, descarta
- * la raiz del heap (LRU) y lo reemplaza. */
-void cache_insertar();
- 
-/* Deja la cache vacia (se usa antes de compactar). */
+
+void cache_imprimir();
+
 void cache_vaciar();
- 
-void cache_imprimir();        /* opcional, para depurar */
- 
+
+void cache_destruir();
+
+void cache_intercambiar(int i, int j);
+
+void cache_subir(int i);
+
+void cache_bajar(int i);
+
+int cache_buscar(int direccion);
+
+int cache_menor(int i, int j);
+
+void cache_marcar_usado(int i);
+
+int cache_escribir(int direccion, int offset,char *origen, int n);
+
+int cache_insertar(int direccion, char *bloque);
+
+
 #endif
+ 
  

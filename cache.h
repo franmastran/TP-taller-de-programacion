@@ -21,6 +21,8 @@ void cache_vaciar();
 
 void cache_destruir();
 
+int cache_rango_valido(int direccion, int offset, const char *datos, int n);
+
 void cache_intercambiar(int i, int j);
 
 void cache_subir(int i);
@@ -37,7 +39,7 @@ int cache_escribir(int direccion, int offset,char *origen, int n);
 
 int cache_insertar(int direccion, char *bloque);
 
+void cache_reiniciar_estadisticas();
 
 #endif
- 
  

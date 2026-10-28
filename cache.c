@@ -26,7 +26,12 @@ void cache_intercambiar(int i, int j) {
     heap[j] = aux;
 }
 
-
+int cache_rango_valido(int direccion, int offset, const char *datos, int n) {
+    return heap != NULL && datos != NULL && heap_tam_bloque > 0 && direccion >= 0 &&
+           direccion % heap_tam_bloque == 0 && offset >= 0 &&
+           n >= 0 && offset <= heap_tam_bloque &&
+           n <= heap_tam_bloque - offset;
+}
 void cache_subir(int i) {
     while (i > 0) {
         int padre = (i - 1) / 2;
@@ -168,4 +173,9 @@ int cache_insertar(int direccion, char *bloque) {
         cache_bajar(0);
     }
     return 0;
+}
+
+void cache_reiniciar_estadisticas(void) {
+    heap_hits = 0;
+    heap_misses = 0;
 }

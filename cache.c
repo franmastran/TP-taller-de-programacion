@@ -1,5 +1,6 @@
 #include "cache.h"
 
+/* Un unico heap de bloques Cache. */
 Cache *heap = NULL;
 int heap_cantidad = 0;
 int heap_capacidad = 0;
@@ -8,35 +9,23 @@ int heap_tiempo = 0;
 int heap_hits = 0;
 int heap_misses = 0;
 
-int cache_iniciar(int capacidad, int tam_bloque) {
-    if (capacidad <= 0 || tam_bloque <= 0 || heap != NULL) return -1;
-    heap = calloc(capacidad, sizeof(Cache));
-    if (heap == NULL) return -1;
-    heap_capacidad = capacidad;
-    heap_tam_bloque = tam_bloque;
-    heap_cantidad = 0;
-    heap_tiempo = 0;
-    heap_hits = 0;
-    heap_misses = 0;
-    return 0;
-}   
+/* Menor frecuencia primero; en empate, sale el menos reciente. */
+int cache_menor(int i, int j) {
+    if (heap[i].frecuencia != heap[j].frecuencia)
+        return heap[i].frecuencia < heap[j].frecuencia;
+    return heap[i].ultimo < heap[j].ultimo;
+}
+
 void cache_intercambiar(int i, int j) {
     Cache aux = heap[i];
     heap[i] = heap[j];
     heap[j] = aux;
 }
 
-int cache_rango_valido(int direccion, int offset, const char *datos, int n) {
-    return heap != NULL && datos != NULL && heap_tam_bloque > 0 && direccion >= 0 &&
-           direccion % heap_tam_bloque == 0 && offset >= 0 &&
-           n >= 0 && offset <= heap_tam_bloque &&
-           n <= heap_tam_bloque - offset;
-}
 void cache_subir(int i) {
     while (i > 0) {
         int padre = (i - 1) / 2;
-        if (!cache_menor(i, padre)) 
-            break;
+        if (!cache_menor(i, padre)) break;
         cache_intercambiar(i, padre);
         i = padre;
     }
@@ -47,12 +36,9 @@ void cache_bajar(int i) {
         int menor = i;
         int izq = 2 * i + 1;
         int der = 2 * i + 2;
-        if (izq < heap_cantidad && cache_menor(izq, menor)) 
-            menor = izq;
-        if (der < heap_cantidad && cache_menor(der, menor)) 
-            menor = der;
-        if (menor == i) 
-            break;
+        if (izq < heap_cantidad && cache_menor(izq, menor)) menor = izq;
+        if (der < heap_cantidad && cache_menor(der, menor)) menor = der;
+        if (menor == i) break;
         cache_intercambiar(i, menor);
         i = menor;
     }
@@ -65,44 +51,28 @@ int cache_buscar(int direccion) {
     return -1;
 }
 
-
-int cache_menor(int i, int j) {
-    if (heap[i].frecuencia != heap[j].frecuencia)
-        return heap[i].frecuencia < heap[j].frecuencia;
-    return heap[i].ultimo < heap[j].ultimo;
-}
-
-
-
-
-void cache_vaciar() {
-    for (int i = 0; i < heap_cantidad; i++) {
-        free(heap[i].dato);
-        heap[i].dato = NULL;
-    }
+int cache_iniciar(int capacidad, int tam_bloque) {
+    if (capacidad <= 0 || tam_bloque <= 0 || heap != NULL) return -1;
+    heap = calloc(capacidad, sizeof(Cache));
+    if (heap == NULL) return -1;
+    heap_capacidad = capacidad;
+    heap_tam_bloque = tam_bloque;
     heap_cantidad = 0;
     heap_tiempo = 0;
-}
-
-void cache_destruir() {
-    cache_vaciar();
-    free(heap);
-    heap = NULL;
-    heap_capacidad = 0;
-    heap_tam_bloque = 0;
     heap_hits = 0;
     heap_misses = 0;
+    return 0;
 }
 
-
-void cache_imprimir() {
-    for (int i = 0; i < heap_cantidad; i++) {
-        printf("heap[%d]: direccion=%d, frecuencia=%d, ultimo=%d\n",
-               i, heap[i].direccion, heap[i].frecuencia, heap[i].ultimo);
-    }
+int cache_rango_valido(int direccion, int offset, char *datos, int n) {
+    return heap != NULL && datos != NULL && heap_tam_bloque > 0 && direccion >= 0 &&
+           direccion % heap_tam_bloque == 0 && offset >= 0 &&
+           n >= 0 && offset <= heap_tam_bloque &&
+           n <= heap_tam_bloque - offset;
 }
 
-void cache_marcar_usado(int i) { //un hit aumenta frecuencia y baja el bloque
+/* Un hit aumenta la frecuencia y mueve el bloque hacia abajo. */
+void cache_marcar_usado(int i) {
     heap[i].frecuencia++;
     heap[i].ultimo = ++heap_tiempo;
     cache_bajar(i);
@@ -175,7 +145,45 @@ int cache_insertar(int direccion, char *bloque) {
     return 0;
 }
 
+void cache_vaciar(void) {
+    for (int i = 0; i < heap_cantidad; i++) {
+        free(heap[i].dato);
+        heap[i].dato = NULL;
+    }
+    heap_cantidad = 0;
+    heap_tiempo = 0;
+}
+
+void cache_destruir(void) {
+    cache_vaciar();
+    free(heap);
+    heap = NULL;
+    heap_capacidad = 0;
+    heap_tam_bloque = 0;
+    heap_hits = 0;
+    heap_misses = 0;
+}
+
+int cache_hits(void) { return heap_hits; }
+int cache_misses(void) { return heap_misses; }
+
+double cache_tasa_aciertos(void) {
+    double total = (double)heap_hits + heap_misses;
+    return total == 0 ? 0 : heap_hits / total;
+}
+
 void cache_reiniciar_estadisticas(void) {
     heap_hits = 0;
     heap_misses = 0;
+}
+
+void cache_imprimir(void) {
+    for (int i = 0; i < heap_cantidad; i++) {
+        printf("heap[%d]: direccion=%d, frecuencia=%d, ultimo=%d\n",
+               i, heap[i].direccion, heap[i].frecuencia, heap[i].ultimo);
+    }
+}
+
+int cache_tamano_bloque(void) {
+    return heap_tam_bloque;
 }

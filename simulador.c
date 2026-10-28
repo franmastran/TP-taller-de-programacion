@@ -4,10 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* La cache existente mantiene sus estadisticas en estas variables. */
-extern int heap_hits;
-extern int heap_misses;
-extern int heap_tam_bloque;
 
 int simulador_iniciar(int capacidad_cache, int tam_bloque) {
     if (tam_bloque <= 0 || tam_bloque % MEMORIA_TAM_PALABRA != 0) return -1;
@@ -34,21 +30,19 @@ int simulador_direccion(int id) {
 }
 
 /* Arma un bloque completo; las posiciones no reservadas se rellenan con cero. */
-int simulador_cargar_bloque(int direccion) {
-    char *bloque = malloc(heap_tam_bloque);
+/* Lee un bloque completo de memoria principal; rellena huecos con cero. */
+int simulador_cargar_bloque(int direccion, char *bloque) {
     if (bloque == NULL) return -1;
-    for (int i = 0; i < heap_tam_bloque; i++) {
+    for (int i = 0; i < cache_tamano_bloque(); i++) {
         if (memoria_leer(direccion + i, &bloque[i], 1) != 0)
             bloque[i] = 0;
     }
-    int resultado = cache_insertar(direccion, bloque);
-    free(bloque);
-    return resultado;
+    return 0;
 }
 
 /* Se comprueba el rango completo antes de producir efectos parciales. */
 int simulador_validar(int direccion, int n) {
-    if (heap_tam_bloque <= 0 || direccion < 0 || n <= 0) return -1;
+    if (cache_tamano_bloque() <= 0 || direccion < 0 || n <= 0) return -1;
     char *aux = malloc(n);
     if (aux == NULL) return -1;
     int resultado = memoria_leer(direccion, aux, n);
@@ -61,20 +55,26 @@ int simulador_leer(int direccion, char *destino, int n) {
     int procesados = 0;
     while (procesados < n) {
         int actual = direccion + procesados;
-        int base = actual - actual % heap_tam_bloque;
+        int base = actual - actual % cache_tamano_bloque();
         int offset = actual - base;
-        int cantidad = heap_tam_bloque - offset;
+        int cantidad = cache_tamano_bloque() - offset;
         if (cantidad > n - procesados) cantidad = n - procesados;
         int resultado = cache_leer(base, offset, destino + procesados, cantidad);
         if (resultado < 0) return -1;
         if (resultado == 0) {
-            if (simulador_cargar_bloque(base) != 0) return -1;
-            /* Copia sin registrar un segundo acceso: el acceso ya fue un miss. */
-            extern Cache *heap;
-            int indice = cache_buscar(base);
-            if (indice < 0) return -1;
-            for (int i = 0; i < cantidad; i++)
-                destino[procesados + i] = heap[indice].dato[offset + i];
+            int tam_bloque = cache_tamano_bloque();
+            char *bloque = malloc(tam_bloque);
+            if (bloque == NULL) return -1;
+            if (simulador_cargar_bloque(base, bloque) != 0 ||
+                cache_insertar(base, bloque) != 0) {
+                free(bloque);
+                return -1;
+            }
+            /* Ya tenemos el bloque: no volvemos a buscarlo en la cache. */
+            for (int i = 0; i < cantidad; i++) {
+                destino[procesados + i] = bloque[offset + i];
+            }
+            free(bloque);
         }
         procesados += cantidad;
     }
@@ -86,15 +86,24 @@ int simulador_escribir(int direccion, char *origen, int n) {
     int procesados = 0;
     while (procesados < n) {
         int actual = direccion + procesados;
-        int base = actual - actual % heap_tam_bloque;
+        int base = actual - actual % cache_tamano_bloque();
         int offset = actual - base;
-        int cantidad = heap_tam_bloque - offset;
+        int cantidad = cache_tamano_bloque() - offset;
         if (cantidad > n - procesados) cantidad = n - procesados;
-        int resultado = cache_escribir(base, offset, (char *)origen + procesados, cantidad);
+        int resultado = cache_escribir(base, offset, origen + procesados, cantidad);
         if (resultado < 0) return -1;
         /* Write-through: memoria principal siempre se actualiza. */
         if (memoria_escribir_simulador(actual, origen + procesados, cantidad) != 0) return -1;
-        if (resultado == 0 && simulador_cargar_bloque(base) != 0) return -1;
+        if (resultado == 0) {
+            char *bloque = malloc(cache_tamano_bloque());
+            if (bloque == NULL) return -1;
+            if (simulador_cargar_bloque(base, bloque) != 0 ||
+                cache_insertar(base, bloque) != 0) {
+                free(bloque);
+                return -1;
+            }
+            free(bloque);
+        }
         procesados += cantidad;
     }
     return 0;
@@ -110,9 +119,11 @@ void simulador_reiniciar_prueba(void) {
 }
 
 void simulador_estadisticas(void) {
-    int total = heap_hits + heap_misses;
-    double tasa = total == 0 ? 0.0 : 100.0 * heap_hits / total;
-    printf("Hits: %d | Misses: %d | Efectividad: %.2f%%\n", heap_hits, heap_misses, tasa);
+    int hits = cache_hits();
+    int misses = cache_misses();
+    int total = hits + misses;
+    double tasa = total == 0 ? 0.0 : 100.0 * hits / total;
+    printf("Hits: %d | Misses: %d | Efectividad: %.2f%%\n", hits, misses, tasa);
 }
 
 void simulador_imprimir(void) {
